@@ -1,0 +1,56 @@
+$type='Microsoft.Databricks/workspaces'
+$Filepath="C:\temp\ADLSPerm\ADBList-Bdl-04192021.csv"
+Out-Null | Export-Csv $Filepath
+$spnlist=@()
+foreach ($spns in (Get-Content c:\temp\SPNList.txt))
+{  $svc=$spns.split('-')
+   $item = New-Object PSObject
+   $item | Add-Member -type NoteProperty -Name 'SpnName' -Value $spns
+   $item | Add-Member -type NoteProperty -Name 'ITSG' -Value $svc[4]
+   $spnlist += $item
+ }
+$spnlist
+$report=@()
+$SubName=(Get-AzSubscription | where {$_.name -like "*Core Data Ecosystem*"}).Name
+foreach ($sub in $SubName )
+{
+Select-AzSubscription -SubscriptionName $sub | out-null
+
+##$Gen=Get-AzResource | Where-Object {$_.ResourceType -in $type } | Sort-Object ResourceType | select ResourceGroupName,Name,ResourceType  
+$Resources=Get-AzResource | Where-Object {$_.ResourceType -in $type -and $_.Tags.ITSG -in $spnlist.itsg  } | select ResourceGroupName,Name,@{ Name = 'ServiceName';  Expression = {$_.Tags.ServiceName}},@{ Name = 'ITSG';  Expression = {$_.Tags.ITSG}}
+
+foreach($res in $Resources)
+{
+write-host "ADB Name : $($res.name)"
+
+$subname=(get-azcontext).Subscription.Name
+$ADBName=$res.Name
+$ServiceName=$res.ServiceName
+$ITSG=$res.ITSG
+$rg=$res.ResourceGroupName
+$spn=($spnlist | where {$_.ITSG -eq $ITSG}).SpnName
+$spn	
+<#if ($spn.count -gt 1)
+{
+$list=$null
+foreach($spnlist in $spn )
+{
+$list +=$spnlist+' '
+}
+$aspn=$list
+}else
+{
+$aspn=$spn	
+}#>
+	
+$obj = New-Object PSObject
+	$Obj | Add-Member -MemberType NoteProperty -Name "SPNName" -Value $spn
+	$Obj | Add-Member -MemberType NoteProperty -Name "SubscriptionNamee" -Value $subname
+	$Obj | Add-Member -MemberType NoteProperty -Name "ServiceName" -Value $ServiceName
+	$Obj | Add-Member -MemberType NoteProperty -Name "ResourceGroupName" -Value $rg
+	$Obj | Add-Member -MemberType NoteProperty -Name "ADBWorkSpace" -Value $ADBName
+	$report +=$obj
+}
+}
+$report
+$report | Export-csv $Filepath -NoTypeInformation
